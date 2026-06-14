@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Sagamore Resort – Floor Plan Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ════════════════════════════════════════════════════════════
+       ADMIN / IPAD CONTROLLER VIEW  (?view=admin  or  default)
+       ════════════════════════════════════════════════════════════ -->
+  <div id="admin-view" class="view">
+
+    <header id="control-bar">
+      <div class="brand">
+        <span class="brand-crest">&#x2E9F;</span>
+        <div class="brand-text">
+          <span class="brand-name">THE SAGAMORE</span>
+          <span class="brand-sub">Floor Plan Manager</span>
+        </div>
+      </div>
+      <div class="control-actions">
+        <button id="add-table-btn" class="btn btn-primary">
+          <span class="btn-icon">+</span> Add Table
+        </button>
+        <a href="?view=tv" target="_blank" rel="noopener" class="btn btn-outline">
+          TV View &#x2197;
+        </a>
+      </div>
+    </header>
+
+    <div id="admin-body">
+
+      <div id="canvas-wrapper">
+        <canvas id="floor-canvas"></canvas>
+      </div>
+
+      <aside id="service-queue">
+        <h2 class="queue-title">Service Pass Queue</h2>
+
+        <div id="team-tabs">
+          <!-- Populated by JS -->
+        </div>
+
+        <div id="queue-list">
+          <p class="queue-placeholder">Select a team above<br>to view their tables.</p>
+        </div>
+
+        <div id="queue-footer">
+          <div id="queue-summary"></div>
+        </div>
+      </aside>
+
+    </div>
+  </div><!-- /#admin-view -->
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       KITCHEN MONITOR VIEW  (?view=tv)
+       ════════════════════════════════════════════════════════════ -->
+  <div id="tv-view" class="view">
+
+    <div id="tv-header">
+      <div id="tv-brand">
+        <span class="tv-crest">&#x2E9F;</span>
+        <span class="tv-venue">THE SAGAMORE RESORT</span>
+      </div>
+      <span id="tv-subtitle">Banquet Service &mdash; Live Floor Plan</span>
+      <span id="tv-clock"></span>
+    </div>
+
+    <div id="tv-canvas-wrapper">
+      <canvas id="tv-canvas"></canvas>
+    </div>
+
+    <div id="tv-status-bar">
+      <span id="tv-connection-status" class="status-connecting">&#x25CF; Connecting&hellip;</span>
+      <span id="tv-last-update"></span>
+    </div>
+
+  </div><!-- /#tv-view -->
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       EDIT TABLE MODAL
+       ════════════════════════════════════════════════════════════ -->
+  <div id="modal-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="modal">
+
+      <div id="modal-header">
+        <div id="modal-title-row">
+          <span id="modal-color-swatch"></span>
+          <h2 id="modal-title">Edit Table</h2>
+        </div>
+        <button id="modal-close" class="icon-btn" aria-label="Close modal">&#x2715;</button>
+      </div>
+
+      <div id="modal-body">
+        <input type="hidden" id="modal-table-id" />
+
+        <div class="form-row">
+          <label for="modal-label">Table Number / Label</label>
+          <input type="text" id="modal-label" placeholder="e.g. 12" maxlength="8" autocomplete="off" />
+        </div>
+
+        <div class="form-row">
+          <label for="modal-guest-count">Total Guests at Table</label>
+          <input type="number" id="modal-guest-count" min="0" max="30" placeholder="0" />
+        </div>
+
+        <div class="form-row">
+          <label>Entr&eacute;e Counts</label>
+          <div class="entree-grid">
+            <div class="entree-cell">
+              <span class="entree-dot beef"></span>
+              <span class="entree-sublabel">Beef</span>
+              <input type="number" id="modal-beef" class="entree-input" min="0" placeholder="0" />
+            </div>
+            <div class="entree-cell">
+              <span class="entree-dot chicken"></span>
+              <span class="entree-sublabel">Chicken</span>
+              <input type="number" id="modal-chicken" class="entree-input" min="0" placeholder="0" />
+            </div>
+            <div class="entree-cell">
+              <span class="entree-dot fish"></span>
+              <span class="entree-sublabel">Fish</span>
+              <input type="number" id="modal-fish" class="entree-input" min="0" placeholder="0" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="modal-server-team">Server Team Assignment</label>
+          <select id="modal-server-team">
+            <option value="">&#x2014; Unassigned &#x2014;</option>
+            <option value="Team 1">Team 1</option>
+            <option value="Team 2">Team 2</option>
+            <option value="Team 3">Team 3</option>
+            <option value="Team 4">Team 4</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="modal-allergy">
+            Allergy / Dietary Notes
+            <span class="label-hint">&#x26A0; Triggers allergy flag on floor plan</span>
+          </label>
+          <textarea id="modal-allergy" rows="3"
+            placeholder="e.g. Jack S. &#x2013; GF / Shellfish allergy"></textarea>
+        </div>
+      </div><!-- /#modal-body -->
+
+      <div id="modal-footer">
+        <button id="delete-table-btn" class="btn btn-danger">
+          &#x1F5D1; Delete Table
+        </button>
+        <div class="modal-footer-right">
+          <button id="modal-cancel-btn" class="btn btn-ghost">Cancel</button>
+          <button id="save-table-btn" class="btn btn-primary">Save Changes</button>
+        </div>
+      </div>
+
+    </div><!-- /#modal -->
+  </div><!-- /#modal-overlay -->
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       TOAST NOTIFICATION
+       ════════════════════════════════════════════════════════════ -->
+  <div id="toast" aria-live="polite"></div>
+
+
+  <!-- ════════════════════════════════════════════════════════════
+       SCRIPTS  (Fabric.js v5 + Supabase JS v2)
+       ════════════════════════════════════════════════════════════ -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"
+          integrity="sha512-CeIsOAsgJnmevfCi2C6/3OhkLdOJ6T6IcwCJpLBIXOzUwSMhXkR8JCHBsHjvggjq4eiHmopX5x3I4pUVf/Qg=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
