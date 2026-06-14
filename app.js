@@ -8,8 +8,8 @@
    §1  CONFIGURATION
        Replace the two placeholder strings before going live.
    ───────────────────────────────────────────────────────────────────── */
-const SUPABASE_URL      = 'https://qkfscgweyfopjgxhlfnl.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_t0jVHlUpSdS9mbGXSGolDw_rfl33Pao';
+const SUPABASE_URL      = 'https://uttyrbthhlgrfoobfngu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0dHlyYnRoaGxncmZvb2Jmbmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzOTYwMTcsImV4cCI6MjA5Njk3MjAxN30.t76SBJ5uiQVdoXgCQ48uxiimCTWxPh4aXDP4hUitiRs';
 const TABLE_NAME        = 'wedding_tables';
 
 // Logical coordinate space stored in the database.
