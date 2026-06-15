@@ -267,6 +267,21 @@
        ════════════════════════════════════════════════════════════ -->
   <div id="toast" aria-live="polite"></div>
 
+  <!-- Fabric.js v5 uses the non-standard 'alphabetical' textBaseline internally.
+       Chromium 112+ logs a warning for it. This shim silently maps it to the
+       equivalent standard value 'alphabetic' before Fabric loads. -->
+  <script>
+    (function () {
+      const proto = CanvasRenderingContext2D.prototype;
+      const _desc = Object.getOwnPropertyDescriptor(proto, 'textBaseline');
+      if (!_desc) return;
+      Object.defineProperty(proto, 'textBaseline', {
+        get: _desc.get,
+        set(v) { _desc.set.call(this, v === 'alphabetical' ? 'alphabetic' : v); },
+        configurable: true,
+      });
+    })();
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="app.js"></script>

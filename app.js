@@ -148,9 +148,17 @@ async function loadEvents() {
   return eventsList;
 }
 
+function safeStorageGet(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function safeStorageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* tracking prevention — silently skip */ }
+}
+
 function resolveEventId(urlParam) {
   if (urlParam) return urlParam;
-  const stored = localStorage.getItem(EVENT_STORAGE_KEY);
+  const stored = safeStorageGet(EVENT_STORAGE_KEY);
   if (stored) return stored;
   if (eventsList.length > 0) return eventsList[0].event_id;
   return 'event_default';
@@ -159,7 +167,7 @@ function resolveEventId(urlParam) {
 async function selectEvent(eventId) {
   if (!eventId) return;
   currentEventId = eventId;
-  localStorage.setItem(EVENT_STORAGE_KEY, eventId);
+  safeStorageSet(EVENT_STORAGE_KEY, eventId);
 
   // Sync URL without reload
   const url = new URL(window.location.href);
@@ -1028,17 +1036,15 @@ function renderTeamTabs() {
 
   if (sorted.length === 0) {
     container.innerHTML =
-      '<span class="teams-hint">No teams yet — open <strong>Manage Teams</strong>.</span>';
+      '<span class="teams-hint">No teams yet — click <strong>Manage Teams</strong> to add one.</span>';
     document.getElementById('queue-list').innerHTML =
-      '<p class="queue-placeholder">Create server teams,<br>then assign tables via the editor.</p>';
+      '<p class="queue-placeholder">Add server teams first,<br>then assign them to tables.</p>';
     document.getElementById('queue-summary').textContent = '';
     return;
   }
 
+  // Show ALL teams as tabs, even those with 0 assigned tables
   sorted.forEach(team => {
-    const hasTables = countTablesForTeam(team.team_id) > 0;
-    if (!hasTables) return;
-
     const btn = document.createElement('button');
     btn.className   = 'team-tab' + (activeTeamId === team.team_id ? ' active' : '');
     btn.dataset.teamId = team.team_id;
@@ -1090,7 +1096,11 @@ function renderQueueList(teamId) {
   const list = document.getElementById('queue-list');
 
   if (rows.length === 0) {
-    list.innerHTML = `<p class="queue-placeholder">No tables assigned to ${escHtml(team?.name ?? 'this team')}.</p>`;
+    const hasAnyTables = tableMap.size > 0;
+    const hint = hasAnyTables
+      ? `Double-click a table on the canvas, then pick <strong>${escHtml(team?.name ?? 'this team')}</strong> from the team dropdown.`
+      : `Click <strong>+ Add Table</strong> to place a table, then double-click it to assign it to <strong>${escHtml(team?.name ?? 'this team')}</strong>.`;
+    list.innerHTML = `<p class="queue-placeholder">${hint}</p>`;
     document.getElementById('queue-summary').textContent = '';
     return;
   }
