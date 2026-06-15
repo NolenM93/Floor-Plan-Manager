@@ -14,6 +14,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const TABLE_NAME  = 'wedding_tables';
 const EVENTS_NAME = 'events';
 const TEAMS_NAME  = 'teams';
+const SEATS_NAME  = 'table_seats';
 
 const LOGICAL_W = 1600;
 const LOGICAL_H = 900;
@@ -56,6 +57,10 @@ let realtimeChannel = null;
 // Echo-guard: skip realtime UPDATEs we just wrote ourselves
 const recentlyEdited = new Map(); // table_id → { fields, ts }
 
+// Seat management
+const seatsMap = new Map();       // table_id → seat[]
+let seatsModalTableId = null;
+
 /* ─────────────────────────────────────────────────────────────────────
    §3  BOOT
    ───────────────────────────────────────────────────────────────────── */
@@ -63,15 +68,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const params    = new URLSearchParams(window.location.search);
-  currentView     = params.get('view') === 'tv' ? 'tv' : 'admin';
+  const viewParam = params.get('view');
+  currentView = viewParam === 'tv' ? 'tv' : viewParam === 'print' ? 'print' : 'admin';
 
   if (currentView === 'tv') {
     document.getElementById('admin-view').classList.add('hidden');
+    document.getElementById('print-view').classList.add('hidden');
     document.getElementById('tv-view').classList.remove('hidden');
     await rafTicks(2);
     await initTVView(params.get('event'));
+  } else if (currentView === 'print') {
+    document.getElementById('admin-view').classList.add('hidden');
+    document.getElementById('tv-view').classList.add('hidden');
+    document.getElementById('print-view').classList.remove('hidden');
+    await rafTicks(2);
+    await initPrintView(params.get('event'));
   } else {
     document.getElementById('tv-view').classList.add('hidden');
+    document.getElementById('print-view').classList.add('hidden');
     await requireAuth();
     document.getElementById('admin-view').classList.remove('hidden');
     await rafTicks(2);
@@ -175,6 +189,7 @@ async function selectEvent(eventId) {
   history.replaceState(null, '', url.toString());
 
   updateTVLink();
+  updateServicePassLink();
   updateEventPickerUI();
 
   const ev = eventsList.find(e => e.event_id === eventId);
@@ -206,6 +221,13 @@ function updateTVLink() {
   const link = document.getElementById('tv-link');
   if (link && currentEventId) {
     link.href = `?view=tv&event=${encodeURIComponent(currentEventId)}`;
+  }
+}
+
+function updateServicePassLink() {
+  const link = document.getElementById('service-pass-btn');
+  if (link && currentEventId) {
+    link.href = `?view=print&event=${encodeURIComponent(currentEventId)}`;
   }
 }
 
@@ -652,27 +674,7 @@ function updateEmptyState() {
 /* ─────────────────────────────────────────────────────────────────────
    §11  DATA LOADING
    ───────────────────────────────────────────────────────────────────── */
-async function loadAllTables() {
-  if (!currentEventId) return;
-
-  const { data, error } = await db
-    .from(TABLE_NAME)
-    .select('*')
-    .eq('event_id', currentEventId);
-
-  if (error) {
-    showToast('Could not load tables: ' + error.message, 'error');
-    return;
-  }
-
-  canvas.clear();
-  tableMap.clear();
-  allergySet.clear();
-
-  for (const row of (data ?? [])) addToCanvas(row);
-  canvas.renderAll();
-  updateEmptyState();
-}
+// NOTE: loadAllTables is defined in §24 to support both canvas and print views.
 
 /* ─────────────────────────────────────────────────────────────────────
    §12  ADMIN VIEW INIT
@@ -744,6 +746,10 @@ function bindAdminEvents() {
   document.getElementById('save-table-btn').addEventListener('click', handleSaveModal);
   document.getElementById('delete-table-btn').addEventListener('click', handleDeleteFromModal);
   document.getElementById('duplicate-table-btn').addEventListener('click', handleDuplicateTable);
+  document.getElementById('manage-guests-btn').addEventListener('click', () => {
+    const tableId = document.getElementById('modal-table-id').value;
+    if (tableId) openSeatsModal(tableId);
+  });
 
   document.getElementById('modal-server-team').addEventListener('change', (e) => {
     document.getElementById('modal-color-swatch').style.background = teamColor(e.target.value || null);
@@ -757,6 +763,7 @@ function bindAdminEvents() {
       closeModal();
       closeTeamsModal();
       closeEventModal();
+      closeSeatsModal();
     } else {
       handleKeyboard(e);
     }
@@ -1419,4 +1426,464 @@ function hexToRgba(hex, alpha) {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   §23  SEAT MANAGEMENT
+   ───────────────────────────────────────────────────────────────────── */
+
+const ENTREE_CATEGORIES = [
+  { value: 'beef',       label: 'B – Beef',       short: 'B', cls: 'sp-cat-beef'    },
+  { value: 'chicken',    label: 'C – Chicken',    short: 'C', cls: 'sp-cat-chicken' },
+  { value: 'fish',       label: 'F – Fish',       short: 'F', cls: 'sp-cat-fish'    },
+  { value: 'vegetarian', label: 'V – Vegetarian', short: 'V', cls: 'sp-cat-veg'     },
+  { value: 'kids',       label: 'K – Kids Menu',  short: 'K', cls: 'sp-cat-kids'    },
+  { value: 'other',      label: 'O – Other',      short: 'O', cls: 'sp-cat-other'   },
+  { value: '',           label: '— Unset —',      short: '?', cls: ''               },
+];
+
+function getCatMeta(value) {
+  return ENTREE_CATEGORIES.find(c => c.value === (value ?? '')) ?? ENTREE_CATEGORIES[ENTREE_CATEGORIES.length - 1];
+}
+
+/* ── Load all seats for the current event ────────────────────────── */
+async function loadAllSeats() {
+  if (!currentEventId) return;
+  const { data, error } = await db
+    .from(SEATS_NAME).select('*').eq('event_id', currentEventId)
+    .order('seat_number', { ascending: true });
+  if (error) return;
+  seatsMap.clear();
+  for (const s of (data ?? [])) {
+    const arr = seatsMap.get(s.table_id) ?? [];
+    arr.push(s);
+    seatsMap.set(s.table_id, arr);
+  }
+}
+
+/* ── Load seats for one table ────────────────────────────────────── */
+async function loadSeatsForTable(tableId) {
+  const { data, error } = await db
+    .from(SEATS_NAME).select('*').eq('table_id', tableId)
+    .order('seat_number', { ascending: true });
+  if (error) { showToast('Could not load seats: ' + error.message, 'error'); return []; }
+  const seats = data ?? [];
+  seatsMap.set(tableId, seats);
+  return seats;
+}
+
+/* ── Open / close seats modal ────────────────────────────────────── */
+async function openSeatsModal(tableId) {
+  seatsModalTableId = tableId;
+  const entry = tableMap.get(tableId);
+  const label = entry?.row?.label ?? tableId;
+  const tName = entry?.row?.team_id ? (teamsMap.get(entry.row.team_id)?.name ?? 'Unassigned') : 'Unassigned';
+
+  document.getElementById('seats-modal-title').textContent    = `Table ${label} — Guest List`;
+  document.getElementById('seats-modal-subtitle').textContent = `Team: ${tName}`;
+
+  showLoading('Loading seat list…');
+  await loadSeatsForTable(tableId);
+  hideLoading();
+  renderSeatList(tableId);
+  document.getElementById('seats-overlay').classList.remove('hidden');
+
+  document.getElementById('add-seat-btn').onclick     = () => handleAddSeat(tableId);
+  document.getElementById('seats-modal-close').onclick = closeSeatsModal;
+  document.getElementById('seats-modal-done').onclick  = closeSeatsModal;
+  document.getElementById('seats-overlay').onclick     = (e) => { if (e.target === e.currentTarget) closeSeatsModal(); };
+}
+
+function closeSeatsModal() {
+  const overlay = document.getElementById('seats-overlay');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  seatsModalTableId = null;
+}
+
+/* ── Render seat list inside the modal ───────────────────────────── */
+function renderSeatList(tableId) {
+  const seats = seatsMap.get(tableId) ?? [];
+  const tbody = document.getElementById('seat-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (seats.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="seat-empty-row">No seats yet — click <strong>+ Add Seat</strong> below.</td></tr>';
+  } else {
+    for (const seat of seats) tbody.appendChild(buildSeatRow(seat, tableId));
+  }
+
+  updateSeatCountSummary(tableId);
+}
+
+function buildSeatRow(seat, tableId) {
+  const tr       = document.createElement('tr');
+  tr.dataset.seatId = seat.seat_id;
+
+  const catOptions = ENTREE_CATEGORIES.map(c =>
+    `<option value="${c.value}"${(seat.entree_category ?? '') === c.value ? ' selected' : ''}>${c.label}</option>`
+  ).join('');
+
+  // Side buttons — one active at a time
+  const rActive = seat.serve_side === 'right' ? ' side-active-right' : '';
+  const lActive = seat.serve_side === 'left'  ? ' side-active-left'  : '';
+
+  tr.innerHTML = `
+    <td><input class="seat-input seat-num" type="number" value="${seat.seat_number ?? ''}" min="1" max="999" /></td>
+    <td><input class="seat-input seat-first" type="text"   value="${escHtml(seat.first_name ?? '')}" placeholder="First" /></td>
+    <td><input class="seat-input seat-last"  type="text"   value="${escHtml(seat.last_name  ?? '')}" placeholder="Last"  /></td>
+    <td>
+      <select class="seat-cat-select">
+        ${catOptions}
+      </select>
+    </td>
+    <td><input class="seat-input seat-entree-label" type="text" value="${escHtml(seat.entree_label ?? '')}" placeholder="herb-crusted filet mignon…" /></td>
+    <td class="col-side-cell">
+      <button class="seat-side-btn${rActive}" data-side="right" title="Serve from Right">R</button>
+      <button class="seat-side-btn${lActive}" data-side="left"  title="Serve from Left">L</button>
+    </td>
+    <td><input class="seat-input seat-allergy" type="text" value="${escHtml(seat.allergies ?? '')}" placeholder="Allergy / notes" /></td>
+    <td><button class="icon-btn seat-del-btn" title="Remove seat">&#x2715;</button></td>
+  `;
+
+  // Auto-save on blur for text/number inputs
+  tr.querySelectorAll('.seat-input').forEach(inp => {
+    inp.addEventListener('blur', () => commitSeatRow(tr, seat, tableId));
+  });
+
+  // Auto-save on change for the category select
+  tr.querySelector('.seat-cat-select').addEventListener('change', () => commitSeatRow(tr, seat, tableId));
+
+  // Serve-side toggle
+  tr.querySelectorAll('.seat-side-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const side    = btn.dataset.side;
+      const newSide = seat.serve_side === side ? null : side;
+
+      tr.querySelectorAll('.seat-side-btn').forEach(b => {
+        b.classList.remove('side-active-right', 'side-active-left');
+      });
+      if (newSide) btn.classList.add(newSide === 'right' ? 'side-active-right' : 'side-active-left');
+
+      seat.serve_side = newSide;
+      saveSeatFields(seat.seat_id, { serve_side: newSide });
+    });
+  });
+
+  tr.querySelector('.seat-del-btn').addEventListener('click', () => handleDeleteSeat(seat.seat_id, tableId));
+
+  return tr;
+}
+
+async function commitSeatRow(tr, seat, tableId) {
+  const updates = {
+    seat_number:     Math.max(1, parseInt(tr.querySelector('.seat-num').value, 10)       || 1),
+    first_name:      tr.querySelector('.seat-first').value.trim()                        || null,
+    last_name:       tr.querySelector('.seat-last').value.trim()                         || null,
+    entree_category: tr.querySelector('.seat-cat-select').value                          || null,
+    entree_label:    tr.querySelector('.seat-entree-label').value.trim()                 || null,
+    allergies:       tr.querySelector('.seat-allergy').value.trim()                      || null,
+  };
+
+  Object.assign(seat, updates); // optimistic in-memory update
+
+  await saveSeatFields(seat.seat_id, updates);
+  syncTableCountsFromSeats(tableId);
+  updateSeatCountSummary(tableId);
+}
+
+async function saveSeatFields(seatId, updates) {
+  const { error } = await db.from(SEATS_NAME).update(updates).eq('seat_id', seatId);
+  if (error) showToast('Seat save failed: ' + error.message, 'error');
+}
+
+async function handleAddSeat(tableId) {
+  const seats   = seatsMap.get(tableId) ?? [];
+  const nextNum = seats.length > 0 ? Math.max(...seats.map(s => s.seat_number ?? 0)) + 1 : 1;
+  const entry   = tableMap.get(tableId);
+
+  const newSeat = {
+    seat_id:        `seat_${Date.now()}`,
+    table_id:       tableId,
+    event_id:       currentEventId,
+    team_id:        entry?.row?.team_id ?? null,
+    seat_number:    nextNum,
+    first_name:     null,
+    last_name:      null,
+    entree_category: null,
+    entree_label:   null,
+    serve_side:     null,
+    allergies:      null,
+  };
+
+  const { data, error } = await db.from(SEATS_NAME).insert(newSeat).select().single();
+  if (error) { showToast('Add seat failed: ' + error.message, 'error'); return; }
+
+  seats.push(data);
+  seatsMap.set(tableId, seats);
+  renderSeatList(tableId);
+  syncTableCountsFromSeats(tableId);
+
+  // Auto-focus the First Name field of the new row
+  const tbody = document.getElementById('seat-table-body');
+  const rows  = tbody.querySelectorAll('tr[data-seat-id]');
+  rows[rows.length - 1]?.querySelector('.seat-first')?.focus();
+}
+
+async function handleDeleteSeat(seatId, tableId) {
+  const { error } = await db.from(SEATS_NAME).delete().eq('seat_id', seatId);
+  if (error) { showToast('Delete seat failed: ' + error.message, 'error'); return; }
+
+  const seats = seatsMap.get(tableId) ?? [];
+  const idx   = seats.findIndex(s => s.seat_id === seatId);
+  if (idx >= 0) seats.splice(idx, 1);
+
+  renderSeatList(tableId);
+  syncTableCountsFromSeats(tableId);
+}
+
+async function syncTableCountsFromSeats(tableId) {
+  const seats = seatsMap.get(tableId) ?? [];
+  if (seats.length === 0) return;
+
+  const counts = {
+    guest_count:   seats.length,
+    beef_count:    seats.filter(s => s.entree_category === 'beef').length,
+    chicken_count: seats.filter(s => s.entree_category === 'chicken').length,
+    fish_count:    seats.filter(s => s.entree_category === 'fish').length,
+    veg_count:     seats.filter(s => s.entree_category === 'vegetarian').length,
+    kids_count:    seats.filter(s => s.entree_category === 'kids').length,
+  };
+
+  const { data, error } = await db.from(TABLE_NAME)
+    .update(counts).eq('table_id', tableId).select().single();
+
+  // veg_count / kids_count columns only exist after add_seats.sql is run;
+  // if they don't exist yet, retry without them.
+  if (error && error.message?.includes('column')) {
+    const fallback = { guest_count: counts.guest_count, beef_count: counts.beef_count,
+                       chicken_count: counts.chicken_count, fish_count: counts.fish_count };
+    const { data: d2, error: e2 } = await db.from(TABLE_NAME)
+      .update(fallback).eq('table_id', tableId).select().single();
+    if (e2) { showToast('Count sync failed: ' + e2.message, 'error'); return; }
+    const entry = tableMap.get(tableId);
+    if (entry) { Object.assign(entry.row, fallback); refreshOnCanvas(entry.row); canvas.renderAll(); }
+    return;
+  }
+
+  if (error) { showToast('Count sync failed: ' + error.message, 'error'); return; }
+
+  const entry = tableMap.get(tableId);
+  if (entry) {
+    Object.assign(entry.row, counts);
+    refreshOnCanvas(entry.row);
+    canvas.renderAll();
+    renderTeamTabs();
+    if (activeTeamId) renderQueueList(activeTeamId);
+  }
+}
+
+function updateSeatCountSummary(tableId) {
+  const el = document.getElementById('seat-count-summary');
+  if (!el) return;
+  const seats = seatsMap.get(tableId) ?? [];
+  if (seats.length === 0) { el.textContent = ''; return; }
+
+  const b = seats.filter(s => s.entree_category === 'beef').length;
+  const c = seats.filter(s => s.entree_category === 'chicken').length;
+  const f = seats.filter(s => s.entree_category === 'fish').length;
+  const v = seats.filter(s => s.entree_category === 'vegetarian').length;
+  const k = seats.filter(s => s.entree_category === 'kids').length;
+  const parts = [];
+  if (b > 0) parts.push(`${b}B`);
+  if (c > 0) parts.push(`${c}C`);
+  if (f > 0) parts.push(`${f}F`);
+  if (v > 0) parts.push(`${v}V`);
+  if (k > 0) parts.push(`${k}K`);
+  el.textContent = `${seats.length} guests — ${parts.join(' · ')}`;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   §24  PRINT VIEW — SERVICE PASS
+   ───────────────────────────────────────────────────────────────────── */
+async function initPrintView(urlEventParam) {
+  showLoading('Preparing service pass…');
+  await loadEvents();
+  currentEventId = resolveEventId(urlEventParam);
+  await loadTeams();
+  await loadAllTables();
+  await loadAllSeats();
+  hideLoading();
+
+  const ev = eventsList.find(e => e.event_id === currentEventId);
+  renderServicePass(ev);
+
+  const backLink = document.getElementById('print-back-link');
+  if (backLink) backLink.href = `?event=${encodeURIComponent(currentEventId)}`;
+}
+
+// loadAllTables without a canvas (print view has no canvas)
+async function loadAllTables() {
+  if (!currentEventId) return;
+  const { data, error } = await db.from(TABLE_NAME).select('*').eq('event_id', currentEventId);
+  if (error) { showToast('Could not load tables: ' + error.message, 'error'); return; }
+
+  if (currentView === 'print') {
+    // In print view there is no canvas — just populate tableMap
+    tableMap.clear();
+    for (const row of (data ?? [])) tableMap.set(row.table_id, { row, group: null });
+    return;
+  }
+
+  canvas.clear();
+  tableMap.clear();
+  allergySet.clear();
+  for (const row of (data ?? [])) addToCanvas(row);
+  canvas.renderAll();
+  updateEmptyState();
+}
+
+function renderServicePass(ev) {
+  const body = document.getElementById('print-body');
+  if (!body) return;
+
+  const eventName = ev?.name ?? 'Untitled Event';
+  const eventDate = ev?.event_date
+    ? new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-US',
+        { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  const printedAt = new Date().toLocaleString('en-US',
+    { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+
+  const allTables = [...tableMap.values()].map(e => e.row).sort((a, b) => {
+    const na = parseInt(a.label, 10), nb = parseInt(b.label, 10);
+    return (!isNaN(na) && !isNaN(nb)) ? na - nb : String(a.label).localeCompare(String(b.label));
+  });
+
+  const sortedTeams = [...teamsMap.values()].sort((a, b) => a.sort_order - b.sort_order);
+
+  let html = `
+    <div class="sp-doc-header">
+      <div class="sp-title-block">
+        <div class="sp-resort">&#x2E9F; THE SAGAMORE RESORT</div>
+        <div class="sp-event-name">${escHtml(eventName)}</div>
+        ${eventDate ? `<div class="sp-event-date">${escHtml(eventDate)}</div>` : ''}
+      </div>
+      <div class="sp-meta">
+        <span class="sp-meta-label">Service Pass</span>
+        <span class="sp-meta-printed">Printed ${escHtml(printedAt)}</span>
+      </div>
+    </div>`;
+
+  for (const team of sortedTeams) {
+    // Tables fully assigned to this team
+    const teamTables = allTables.filter(t => t.team_id === team.team_id);
+    // Tables where individual seats are assigned to this team (head-table override)
+    const seatOverrideTables = allTables.filter(t =>
+      t.team_id !== team.team_id &&
+      (seatsMap.get(t.table_id) ?? []).some(s => s.team_id === team.team_id)
+    );
+    if (teamTables.length === 0 && seatOverrideTables.length === 0) continue;
+
+    const totalTables = teamTables.length + seatOverrideTables.length;
+    html += `
+      <div class="sp-team-section">
+        <div class="sp-team-header" style="border-left-color:${escHtml(team.color)}">
+          <span class="sp-team-dot" style="background:${escHtml(team.color)}"></span>
+          <span class="sp-team-name">${escHtml(team.name)}</span>
+          <span class="sp-team-info">${totalTables} table${totalTables !== 1 ? 's' : ''}</span>
+        </div>`;
+
+    for (const row of teamTables)         html += buildSpTable(row, null);
+    for (const row of seatOverrideTables) html += buildSpTable(row, team.team_id);
+
+    html += `</div>`;
+  }
+
+  // Unassigned tables
+  const unassigned = allTables.filter(t => !t.team_id);
+  if (unassigned.length > 0) {
+    html += `
+      <div class="sp-team-section">
+        <div class="sp-team-header" style="border-left-color:#6B7280">
+          <span class="sp-team-dot" style="background:#6B7280"></span>
+          <span class="sp-team-name">Unassigned</span>
+        </div>`;
+    for (const row of unassigned) html += buildSpTable(row, null);
+    html += `</div>`;
+  }
+
+  body.innerHTML = html;
+}
+
+function buildSpTable(tableRow, filterTeamId) {
+  const allSeats = seatsMap.get(tableRow.table_id) ?? [];
+  const seats    = filterTeamId
+    ? allSeats.filter(s => s.team_id === filterTeamId)
+    : allSeats;
+  const sorted   = [...seats].sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0));
+
+  const guestCount = sorted.length || tableRow.guest_count || 0;
+
+  // Entrée summary
+  const b = sorted.filter(s => s.entree_category === 'beef').length;
+  const c = sorted.filter(s => s.entree_category === 'chicken').length;
+  const f = sorted.filter(s => s.entree_category === 'fish').length;
+  const v = sorted.filter(s => s.entree_category === 'vegetarian').length;
+  const k = sorted.filter(s => s.entree_category === 'kids').length;
+  const parts = [];
+  if (b > 0) parts.push(`${b}B`);
+  if (c > 0) parts.push(`${c}C`);
+  if (f > 0) parts.push(`${f}F`);
+  if (v > 0) parts.push(`${v}V`);
+  if (k > 0) parts.push(`${k}K`);
+  const summary = parts.join(' · ');
+
+  const rowsHtml = sorted.length === 0
+    ? `<tr><td colspan="6" class="sp-no-seats">No seat assignments yet — add via Guest Seats in the admin view.</td></tr>`
+    : sorted.map(s => {
+        const cat      = getCatMeta(s.entree_category);
+        const sideHtml = s.serve_side === 'right'
+          ? '<span class="sp-side-r">R →</span>'
+          : s.serve_side === 'left'
+            ? '<span class="sp-side-l">← L</span>'
+            : '';
+        const allergyHtml = s.allergies
+          ? `<span class="sp-allergy-note">&#x26A0; ${escHtml(s.allergies)}</span>`
+          : '';
+        const name = [s.first_name, s.last_name].filter(Boolean).map(escHtml).join(' ') || '—';
+        return `
+          <tr class="${s.allergies ? 'sp-row-allergy' : ''}">
+            <td class="sp-col-seat">${s.seat_number ?? '—'}</td>
+            <td class="sp-col-name">${name}</td>
+            <td class="sp-col-cat">${cat.value ? `<span class="sp-cat-badge ${cat.cls}">${cat.short}</span>` : ''}</td>
+            <td class="sp-col-entree">${escHtml(s.entree_label ?? s.entree_category ?? '—')}</td>
+            <td class="sp-col-side">${sideHtml}</td>
+            <td class="sp-col-allergy">${allergyHtml}</td>
+          </tr>`;
+      }).join('');
+
+  return `
+    <div class="sp-table-block">
+      <div class="sp-table-header">
+        <span class="sp-table-label">Table ${escHtml(String(tableRow.label))}</span>
+        ${tableRow.shape === 'rect' ? '<span class="sp-shape-badge">rect</span>' : ''}
+        <span class="sp-table-guests">${guestCount} guest${guestCount !== 1 ? 's' : ''}</span>
+        ${summary ? `<span class="sp-summary">${summary}</span>` : ''}
+      </div>
+      <table class="sp-seat-table">
+        <thead>
+          <tr>
+            <th class="sp-col-seat">Seat</th>
+            <th class="sp-col-name">Name</th>
+            <th class="sp-col-cat">Sel.</th>
+            <th class="sp-col-entree">Entr&eacute;e</th>
+            <th class="sp-col-side">Side</th>
+            <th class="sp-col-allergy">Allergy / Notes</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
 }

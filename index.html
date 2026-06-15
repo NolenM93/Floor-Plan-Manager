@@ -73,6 +73,9 @@
         <a id="tv-link" href="?view=tv" target="_blank" rel="noopener" class="btn btn-outline">
           TV View &#x2197;
         </a>
+        <a id="service-pass-btn" href="?view=print" target="_blank" rel="noopener" class="btn btn-outline">
+          &#x1F4CB; Service Pass
+        </a>
         <button id="logout-btn" class="btn btn-ghost btn-sm">Sign Out</button>
       </div>
     </header>
@@ -204,6 +207,7 @@
         <div class="modal-footer-left">
           <button id="delete-table-btn" class="btn btn-danger">&#x1F5D1; Delete</button>
           <button id="duplicate-table-btn" class="btn btn-ghost">Duplicate</button>
+          <button id="manage-guests-btn" class="btn btn-ghost">&#x1F465; Guest Seats</button>
         </div>
         <div class="modal-footer-right">
           <button id="modal-cancel-btn" class="btn btn-ghost">Cancel</button>
@@ -260,6 +264,64 @@
         <button id="event-modal-create" class="btn btn-primary">Create Event</button>
       </div>
     </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       SEAT MANAGEMENT MODAL
+       ════════════════════════════════════════════════════════════ -->
+  <div id="seats-overlay" class="hidden" role="dialog" aria-modal="true">
+    <div id="seats-modal">
+      <div id="seats-modal-header">
+        <div>
+          <h2 id="seats-modal-title">Table — Guest List</h2>
+          <p id="seats-modal-subtitle" class="seats-modal-sub"></p>
+        </div>
+        <button id="seats-modal-close" class="icon-btn" aria-label="Close seats modal">&#x2715;</button>
+      </div>
+      <div id="seats-modal-body">
+        <div class="seats-table-wrap">
+          <table class="seat-table" id="seat-table">
+            <thead>
+              <tr>
+                <th class="col-seatnum">#</th>
+                <th class="col-first">First Name</th>
+                <th class="col-last">Last Name</th>
+                <th class="col-cat">Category</th>
+                <th class="col-label">Entr&eacute;e (full name)</th>
+                <th class="col-side">Side</th>
+                <th class="col-allergy">Allergy / Notes</th>
+                <th class="col-del"></th>
+              </tr>
+            </thead>
+            <tbody id="seat-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="seats-modal-footer">
+        <button id="add-seat-btn" class="btn btn-ghost">+ Add Seat</button>
+        <div class="seats-modal-footer-right">
+          <span id="seat-count-summary"></span>
+          <button id="seats-modal-done" class="btn btn-primary">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       PRINT / SERVICE PASS VIEW  (?view=print)
+       ════════════════════════════════════════════════════════════ -->
+  <div id="print-view" class="view hidden">
+    <div id="print-controls">
+      <div class="print-brand">
+        <span class="brand-crest">&#x2E9F;</span>
+        <span class="brand-name">THE SAGAMORE</span>
+      </div>
+      <div class="print-controls-right">
+        <button class="btn btn-primary" onclick="window.print()">&#x1F5A8; Print</button>
+        <a id="print-back-link" href="?" class="btn btn-ghost">&#x2190; Back to Admin</a>
+      </div>
+    </div>
+    <div id="print-body"></div>
   </div>
 
   <!-- ════════════════════════════════════════════════════════════

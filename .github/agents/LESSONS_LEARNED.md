@@ -74,3 +74,12 @@ It is read at the start of every session and treated as an extension of the agen
 **Problem:** Deploying new `app.js` that queries `event_id` and `team_id` before running `db/migrations.sql` causes every Supabase call to fail with "column does not exist."
 **Principle:** Schema migrations must be applied in Supabase **before** pushing frontend code that depends on the new columns. Keep migration SQL versioned in the repo and treat it as a deploy gate.
 **Applied to:** `db/migrations.sql`, all deploy workflows.
+
+---
+
+## [2026-06-15] Per-seat team override enables head-table spanning multiple teams
+
+**Context:** Large head tables (20+ seats, rect shape) where different seat ranges are served by different teams.
+**Problem:** The table-level `team_id` only supports one team per table. Head tables at weddings typically span all service teams.
+**Principle:** Add a nullable `team_id` column to `table_seats`. When null, the seat inherits the table's team. When set, that seat appears on that specific team's service pass instead. The service pass renderer queries both: full-table assignments AND seat-level overrides, so a table can appear on multiple teams' sheets with each team seeing only their seats.
+**Applied to:** `db/add_seats.sql`, `renderServicePass()` / `buildSpTable()` in `app.js`.
