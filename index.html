@@ -9,9 +9,42 @@
 <body>
 
   <!-- ════════════════════════════════════════════════════════════
-       ADMIN / IPAD CONTROLLER VIEW  (?view=admin  or  default)
+       ADMIN LOGIN GATE
        ════════════════════════════════════════════════════════════ -->
-  <div id="admin-view" class="view">
+  <div id="login-overlay" class="hidden">
+    <div id="login-card">
+      <div class="login-brand">
+        <span class="brand-crest">&#x2E9F;</span>
+        <h1>THE SAGAMORE</h1>
+        <p>Floor Plan Manager — Captain Sign-In</p>
+      </div>
+      <form id="login-form">
+        <div class="form-row">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" autocomplete="username" required />
+        </div>
+        <div class="form-row">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" autocomplete="current-password" required />
+        </div>
+        <p id="login-error" class="login-error hidden"></p>
+        <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       LOADING OVERLAY
+       ════════════════════════════════════════════════════════════ -->
+  <div id="loading-overlay" class="hidden">
+    <div class="spinner"></div>
+    <span id="loading-text">Loading floor plan…</span>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       ADMIN / IPAD CONTROLLER VIEW
+       ════════════════════════════════════════════════════════════ -->
+  <div id="admin-view" class="view hidden">
 
     <header id="control-bar">
       <div class="brand">
@@ -21,74 +54,78 @@
           <span class="brand-sub">Floor Plan Manager</span>
         </div>
       </div>
+
+      <div class="control-center">
+        <label for="event-picker" class="picker-label">Event</label>
+        <select id="event-picker" class="event-select"></select>
+        <button id="new-event-btn" class="btn btn-ghost btn-sm" title="Create new event">+ New</button>
+      </div>
+
       <div class="control-actions">
+        <button id="manage-teams-btn" class="btn btn-ghost">Manage Teams</button>
+        <label class="toggle-label" title="Snap tables to 24px grid">
+          <input type="checkbox" id="snap-toggle" />
+          <span>Snap</span>
+        </label>
         <button id="add-table-btn" class="btn btn-primary">
           <span class="btn-icon">+</span> Add Table
         </button>
-        <a href="?view=tv" target="_blank" rel="noopener" class="btn btn-outline">
+        <a id="tv-link" href="?view=tv" target="_blank" rel="noopener" class="btn btn-outline">
           TV View &#x2197;
         </a>
+        <button id="logout-btn" class="btn btn-ghost btn-sm">Sign Out</button>
       </div>
     </header>
 
     <div id="admin-body">
-
       <div id="canvas-wrapper">
         <canvas id="floor-canvas"></canvas>
+        <div id="canvas-empty" class="canvas-empty hidden">
+          <p>No tables yet</p>
+          <p class="canvas-empty-hint">Tap <strong>+ Add Table</strong> to place your first table.</p>
+        </div>
       </div>
 
       <aside id="service-queue">
         <h2 class="queue-title">Service Pass Queue</h2>
-
-        <div id="team-tabs">
-          <!-- Populated by JS -->
-        </div>
-
+        <div id="team-tabs"></div>
         <div id="queue-list">
           <p class="queue-placeholder">Select a team above<br>to view their tables.</p>
         </div>
-
         <div id="queue-footer">
           <div id="queue-summary"></div>
         </div>
       </aside>
-
     </div>
-  </div><!-- /#admin-view -->
-
+  </div>
 
   <!-- ════════════════════════════════════════════════════════════
        KITCHEN MONITOR VIEW  (?view=tv)
        ════════════════════════════════════════════════════════════ -->
-  <div id="tv-view" class="view">
-
+  <div id="tv-view" class="view hidden">
     <div id="tv-header">
       <div id="tv-brand">
         <span class="tv-crest">&#x2E9F;</span>
         <span class="tv-venue">THE SAGAMORE RESORT</span>
       </div>
+      <span id="tv-event-name"></span>
       <span id="tv-subtitle">Banquet Service &mdash; Live Floor Plan</span>
       <span id="tv-clock"></span>
     </div>
-
     <div id="tv-canvas-wrapper">
       <canvas id="tv-canvas"></canvas>
     </div>
-
     <div id="tv-status-bar">
       <span id="tv-connection-status" class="status-connecting">&#x25CF; Connecting&hellip;</span>
       <span id="tv-last-update"></span>
     </div>
-
-  </div><!-- /#tv-view -->
-
+  </div>
 
   <!-- ════════════════════════════════════════════════════════════
        EDIT TABLE MODAL
        ════════════════════════════════════════════════════════════ -->
   <div id="modal-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div id="modal">
-
       <div id="modal-header">
         <div id="modal-title-row">
           <span id="modal-color-swatch"></span>
@@ -105,9 +142,24 @@
           <input type="text" id="modal-label" placeholder="e.g. 12" maxlength="8" autocomplete="off" />
         </div>
 
+        <div class="form-row form-row-2col">
+          <div>
+            <label for="modal-shape">Table Shape</label>
+            <select id="modal-shape">
+              <option value="round">Round</option>
+              <option value="rect">Rectangle (Head Table)</option>
+            </select>
+          </div>
+          <div>
+            <label for="modal-capacity">Seat Capacity</label>
+            <input type="number" id="modal-capacity" min="0" max="50" placeholder="e.g. 10" />
+          </div>
+        </div>
+
         <div class="form-row">
           <label for="modal-guest-count">Total Guests at Table</label>
-          <input type="number" id="modal-guest-count" min="0" max="30" placeholder="0" />
+          <input type="number" id="modal-guest-count" min="0" max="50" placeholder="0" />
+          <p id="capacity-warning" class="field-warning hidden">Guests exceed seat capacity</p>
         </div>
 
         <div class="form-row">
@@ -135,10 +187,6 @@
           <label for="modal-server-team">Server Team Assignment</label>
           <select id="modal-server-team">
             <option value="">&#x2014; Unassigned &#x2014;</option>
-            <option value="Team 1">Team 1</option>
-            <option value="Team 2">Team 2</option>
-            <option value="Team 3">Team 3</option>
-            <option value="Team 4">Team 4</option>
           </select>
         </div>
 
@@ -150,31 +198,75 @@
           <textarea id="modal-allergy" rows="3"
             placeholder="e.g. Jack S. &#x2013; GF / Shellfish allergy"></textarea>
         </div>
-      </div><!-- /#modal-body -->
+      </div>
 
       <div id="modal-footer">
-        <button id="delete-table-btn" class="btn btn-danger">
-          &#x1F5D1; Delete Table
-        </button>
+        <div class="modal-footer-left">
+          <button id="delete-table-btn" class="btn btn-danger">&#x1F5D1; Delete</button>
+          <button id="duplicate-table-btn" class="btn btn-ghost">Duplicate</button>
+        </div>
         <div class="modal-footer-right">
           <button id="modal-cancel-btn" class="btn btn-ghost">Cancel</button>
           <button id="save-table-btn" class="btn btn-primary">Save Changes</button>
         </div>
       </div>
+    </div>
+  </div>
 
-    </div><!-- /#modal -->
-  </div><!-- /#modal-overlay -->
+  <!-- ════════════════════════════════════════════════════════════
+       MANAGE TEAMS MODAL
+       ════════════════════════════════════════════════════════════ -->
+  <div id="teams-overlay" class="hidden" role="dialog" aria-modal="true">
+    <div id="teams-modal">
+      <div id="teams-modal-header">
+        <h2>Manage Server Teams</h2>
+        <button id="teams-modal-close" class="icon-btn" aria-label="Close">&#x2715;</button>
+      </div>
+      <div id="teams-modal-body">
+        <div id="teams-list"></div>
+        <div id="teams-add-form">
+          <input type="text" id="new-team-name" placeholder="Team name" maxlength="32" />
+          <input type="color" id="new-team-color" value="#4A90D9" title="Team color" />
+          <button id="add-team-btn" class="btn btn-primary btn-sm">+ Add Team</button>
+        </div>
+      </div>
+      <div id="teams-modal-footer">
+        <button id="teams-modal-done" class="btn btn-primary">Done</button>
+      </div>
+    </div>
+  </div>
 
+  <!-- ════════════════════════════════════════════════════════════
+       NEW EVENT MODAL
+       ════════════════════════════════════════════════════════════ -->
+  <div id="event-overlay" class="hidden" role="dialog" aria-modal="true">
+    <div id="event-modal">
+      <div id="event-modal-header">
+        <h2>New Event</h2>
+        <button id="event-modal-close" class="icon-btn" aria-label="Close">&#x2715;</button>
+      </div>
+      <div id="event-modal-body">
+        <div class="form-row">
+          <label for="new-event-name">Event Name</label>
+          <input type="text" id="new-event-name" placeholder="e.g. Smith Wedding" maxlength="64" />
+        </div>
+        <div class="form-row">
+          <label for="new-event-date">Event Date</label>
+          <input type="date" id="new-event-date" />
+        </div>
+      </div>
+      <div id="event-modal-footer">
+        <button id="event-modal-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="event-modal-create" class="btn btn-primary">Create Event</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ════════════════════════════════════════════════════════════
        TOAST NOTIFICATION
        ════════════════════════════════════════════════════════════ -->
   <div id="toast" aria-live="polite"></div>
 
-
-  <!-- ════════════════════════════════════════════════════════════
-       SCRIPTS  (Fabric.js v5 + Supabase JS v2)
-       ════════════════════════════════════════════════════════════ -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="app.js"></script>

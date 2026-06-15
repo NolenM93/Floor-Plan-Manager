@@ -65,3 +65,12 @@ It is read at the start of every session and treated as an extension of the agen
 **Problem:** The JWT anon key encodes the project `ref` in its payload. If the URL (`https://<project-id>.supabase.co`) references a different project than the one in the JWT `ref` field, every API call returns 401. This can happen silently when a developer has multiple Supabase projects open in browser tabs and copies credentials from the wrong one.
 **Principle:** Always verify that the Supabase URL and anon key come from the **same project** by decoding the JWT payload (base64 middle segment) and confirming the `ref` field matches the project ID in the URL.
 **Applied to:** `app.js` credentials block.
+
+---
+
+## [2026-06-15] Deploy schema migration before frontend that references new columns
+
+**Context:** Extending the Floor Plan Manager with events, teams, team_id, shape, and capacity columns.
+**Problem:** Deploying new `app.js` that queries `event_id` and `team_id` before running `db/migrations.sql` causes every Supabase call to fail with "column does not exist."
+**Principle:** Schema migrations must be applied in Supabase **before** pushing frontend code that depends on the new columns. Keep migration SQL versioned in the repo and treat it as a deploy gate.
+**Applied to:** `db/migrations.sql`, all deploy workflows.
