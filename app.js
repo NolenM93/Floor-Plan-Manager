@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   SAGAMORE RESORT — FLOOR PLAN MANAGER  (v2 — complete)
+   GRAND BALLROOM — FLOOR PLAN MANAGER  (v2 — complete)
    Requires: Fabric.js v5  +  Supabase JS v2
    Run db/migrations.sql in Supabase before deploying.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -32,7 +32,7 @@ const LEGACY_TEAM_COLORS = {
   'Team 4': '#9B59B6',
 };
 
-const EVENT_STORAGE_KEY = 'sagamore_active_event';
+const EVENT_STORAGE_KEY = 'floorplan_active_event';
 
 /* ─────────────────────────────────────────────────────────────────────
    §2  MUTABLE STATE
@@ -1766,7 +1766,7 @@ function renderServicePass(ev) {
   let html = `
     <div class="sp-doc-header">
       <div class="sp-title-block">
-        <div class="sp-resort">&#x2E9F; THE SAGAMORE RESORT</div>
+        <div class="sp-resort">&#x2E9F; GRAND BALLROOM VENUE</div>
         <div class="sp-event-name">${escHtml(eventName)}</div>
         ${eventDate ? `<div class="sp-event-date">${escHtml(eventDate)}</div>` : ''}
       </div>

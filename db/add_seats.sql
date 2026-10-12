@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- SAGAMORE FLOOR PLAN MANAGER — Seats Migration
+-- FLOOR PLAN MANAGER — Seats Migration
 -- Run AFTER migrations.sql has already been applied.
 -- ═══════════════════════════════════════════════════════════════════════
 

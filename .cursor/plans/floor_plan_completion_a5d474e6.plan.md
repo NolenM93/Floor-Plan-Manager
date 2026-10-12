@@ -1,6 +1,6 @@
 ---
 name: Floor Plan Completion
-overview: Bring the Sagamore Floor Plan Manager to 100% by adding a real team manager, multi-event support, admin live-sync, table shapes/capacity, UX polish, and RLS-based security — built on three new/extended Supabase tables.
+overview: Bring the Floor Plan Manager to 100% by adding a real team manager, multi-event support, admin live-sync, table shapes/capacity, UX polish, and RLS-based security — built on three new/extended Supabase tables.
 todos:
   - id: schema
     content: "Phase 1: Write db/migrations.sql — create events + teams tables, add event_id/team_id/shape/capacity to wedding_tables, backfill default event + teams from existing server_team values, add all three to realtime publication. Run in Supabase."
