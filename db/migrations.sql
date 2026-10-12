@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- SAGAMORE FLOOR PLAN MANAGER — Schema Migration
+-- FLOOR PLAN MANAGER — Schema Migration
 -- Run this in the Supabase SQL Editor BEFORE deploying the new app.js.
 -- Safe to re-run: uses IF NOT EXISTS / conditional checks where possible.
 -- ═══════════════════════════════════════════════════════════════════════
